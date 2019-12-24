@@ -1,51 +1,40 @@
 package com.luminagic.rinnegan.binoculars
 
-import android.app.Activity
-import android.content.Intent
-import android.graphics.Point
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
+import android.graphics.Rect
 import android.util.DisplayMetrics
-import android.view.Surface
+import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.ValueCallback
 import android.widget.FrameLayout
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
 import org.apache.cordova.PluginResult
-import org.jetbrains.anko.mediaProjectionManager
 import org.jetbrains.anko.windowManager
 import org.json.JSONArray
+
 
 class Binoculars: CordovaPlugin() {
     private var binocularsView: BinocularsView? = null
     private var mCallbackContext: CallbackContext? = null
 
-    private val REQUEST_MEDIA_PROJECTION = 1
-    private var mResultCode: Int = 0
-    private var mResultData: Intent? = null
-    private var mSurface: Surface? = null
-    private var mMediaProjection: MediaProjection? = null
-    private var mVirtualDisplay: VirtualDisplay? = null
-    private var mMediaProjectionManager: MediaProjectionManager? = null
     private var density: Float = 1.0f
     private var screenW: Int = 0
     private var screenH: Int = 0
+    private var visibleDisplayRect: Rect = Rect()
+    private var dm: DisplayMetrics = DisplayMetrics()
 
     override fun pluginInitialize() {
         super.pluginInitialize()
 
+        var decorView = this.cordova.activity.window.decorView
+        decorView.getWindowVisibleDisplayFrame(visibleDisplayRect)
+
         val defaultDisplay = this.cordova.context.windowManager.defaultDisplay
-        var dm: DisplayMetrics = DisplayMetrics()
-        defaultDisplay.getMetrics(dm)
+        defaultDisplay.getRealMetrics(dm)
         density = dm.density
-        var screenSize: Point = Point()
-        defaultDisplay.getRealSize(screenSize)
-        screenW = screenSize.x.toInt()
-        screenH = screenSize.y.toInt()
-        mMediaProjectionManager = this.cordova.context.mediaProjectionManager
+        screenW = dm.widthPixels
+        screenH = dm.heightPixels
     }
 
     override fun execute(
@@ -73,28 +62,20 @@ class Binoculars: CordovaPlugin() {
         return false
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        tearDownMediaProjection()
-    }
-
     fun show(x: Double, y: Double, width: Double, height: Double, url: String) {
         cordova.activity.runOnUiThread {
             var layout = FrameLayout.LayoutParams(width.toInt(), height.toInt()).apply {
-                leftMargin = x.toInt()
-                topMargin = y.toInt()
+                leftMargin = (x + visibleDisplayRect.left).toInt()
+                topMargin = (y + visibleDisplayRect.top).toInt()
             }
             if (binocularsView == null) {
                 val parent = webView.view.parent as ViewGroup
-                binocularsView = parent.binocularsView(x.toInt(), y.toInt(), screenW, screenH, {
+                binocularsView = parent.binocularsView() {
                     layoutParams = layout
-                })
+                }
 
-                mSurface = binocularsView!!.surfaceView!!.holder.surface
                 binocularsView!!.webView.loadUrl(url)
-                startScreenCapture()
             } else {
-                binocularsView!!.layout(x.toInt(), y.toInt(), screenW, screenH)
                 binocularsView!!.layoutParams = layout
                 binocularsView!!.webView.loadUrl(url)
             }
@@ -112,7 +93,7 @@ class Binoculars: CordovaPlugin() {
             binocularsView = null
             val parent = webView.view.parent as ViewGroup
             parent.removeViewAt( 1) // 0 is SystemWebView
-            stopScreenCapture()
+
             mCallbackContext!!.sendPluginResult(PluginResult(PluginResult.Status.OK, true))
         }
     }
@@ -128,48 +109,5 @@ class Binoculars: CordovaPlugin() {
                 })
             }
         }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
-        if (requestCode == REQUEST_MEDIA_PROJECTION && resultCode == Activity.RESULT_OK) {
-            mResultCode = resultCode
-            mResultData = intent
-            setUpMediaProjection()
-            setUpVirtualDisplay()
-        }
-    }
-
-    private fun setUpMediaProjection() {
-        mMediaProjection = mMediaProjectionManager!!.getMediaProjection(mResultCode, mResultData!!)
-    }
-
-    private fun tearDownMediaProjection() {
-        if (mMediaProjection != null) {
-            mMediaProjection!!.stop()
-            mMediaProjection = null
-        }
-    }
-
-    private fun startScreenCapture() {
-        if (mSurface == null || this.cordova.activity == null) {
-            return
-        }
-        this.cordova.startActivityForResult(this, mMediaProjectionManager!!.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-    }
-
-    private fun setUpVirtualDisplay() {
-        mVirtualDisplay = mMediaProjection!!.createVirtualDisplay("ScreenCapture",
-                screenW, screenH, density.toInt(),
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                mSurface, null, null)
-    }
-
-    private fun stopScreenCapture() {
-        if (mVirtualDisplay != null) {
-            mVirtualDisplay!!.release()
-            mVirtualDisplay = null
-
-        }
-        tearDownMediaProjection()
     }
 }
