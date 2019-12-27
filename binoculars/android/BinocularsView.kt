@@ -1,47 +1,46 @@
 package com.luminagic.rinnegan.binoculars
 
 import android.content.Context
-import android.graphics.Color
-import android.view.SurfaceView
+import android.graphics.Canvas
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import org.jetbrains.anko.*
 import org.jetbrains.anko.custom.ankoView
+import org.jetbrains.anko.gLSurfaceView
+import org.jetbrains.anko.linearLayout
 
-class BinocularsView(context: Context, left: Int, top: Int, width: Int, height: Int) : FrameLayout(context) {
+class BinocularsView(context: Context) : FrameLayout(context) {
     private lateinit var _webView: WebView
     val webView: WebView get() = _webView
 
-    private lateinit var _surfaceView: SurfaceView
-    val surfaceView: SurfaceView get() = _surfaceView
-
     init {
+        val renderer = BinocularsRenderer(context)
+        gLSurfaceView {
+            setEGLContextClientVersion(2)
+            setRenderer(renderer)
+        }
         linearLayout {
             orientation = LinearLayout.HORIZONTAL
-            _webView = webView().lparams(MATCH_PARENT, MATCH_PARENT, 1.0f).apply {
+            _webView = glSurfaceWebView(renderer) {
                 settings.javaScriptEnabled = true
+
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = true
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
 
                 webViewClient = WebViewClient()
+            }.lparams {
+                width = 0
+                height = MATCH_PARENT
+                weight = 1.0f
             }
-            linearLayout().lparams(5, MATCH_PARENT, 0.0f).apply {
-                backgroundColor = Color.BLACK
-            }
-            linearLayout().lparams(MATCH_PARENT, MATCH_PARENT, 1.0f).apply {
-                linearLayout().lparams(width, height, 1.0f).apply {
-                    leftPadding = -left
-                    topPadding = -top
-                    _surfaceView = surfaceView().lparams(MATCH_PARENT, MATCH_PARENT, 1.0f).apply {
-                    }
-                }
-            }
+            _webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            linearLayout().lparams(0, 0, 1.0f).apply {}
         }
     }
 
@@ -52,6 +51,23 @@ class BinocularsView(context: Context, left: Int, top: Int, width: Int, height: 
     }
 }
 
-inline fun ViewManager.binocularsView(left: Int, top: Int, width: Int, height: Int, init: BinocularsView.() -> Unit = {}): BinocularsView {
-    return ankoView({ BinocularsView(it, left, top, width, height) }, theme = 0, init = init)
+class GlSurfaceWebView(context: Context, val renderer: BinocularsRenderer) : WebView(context) {
+
+    override fun draw(canvas: Canvas) {
+        renderer.render { glCanvas ->
+            val ratio = glCanvas.width / canvas.width.toFloat()
+            glCanvas.scale(ratio, ratio)
+            glCanvas.translate(- scrollX.toFloat(), - scrollY.toFloat());
+            super.draw(glCanvas)
+        }
+    }
+}
+
+inline fun ViewManager.binocularsView(init: BinocularsView.() -> Unit): BinocularsView {
+    return ankoView({ BinocularsView(it) }, theme = 0, init = init)
+}
+
+inline fun ViewManager.glSurfaceWebView(
+        renderer: BinocularsRenderer, init: GlSurfaceWebView.() -> Unit): GlSurfaceWebView {
+    return ankoView({ GlSurfaceWebView(it, renderer) }, theme = 0, init = init)
 }
