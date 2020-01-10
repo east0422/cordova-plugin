@@ -19,7 +19,9 @@ import java.util.*
  */
 class BluetoothPair : CordovaPlugin() {
 
-    private var bluetoothAdapter: BluetoothAdapter? = null
+    private val bluetoothAdapter: BluetoothAdapter by lazy {
+        BluetoothAdapter.getDefaultAdapter()
+    }
 
     private var PIN: String? = null  // If needed for pairing
 
@@ -29,40 +31,37 @@ class BluetoothPair : CordovaPlugin() {
     @Throws(JSONException::class)
     override fun execute(action: String, args: CordovaArgs, callbackContext: CallbackContext): Boolean {
 
-//        Log.d(TAG, "action = " + action);
-
-        if (bluetoothAdapter == null) {
-            bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        when(action) {
+            PAIR ->  {
+                pairRequest(args, callbackContext)
+                return true
+            }
+            UNPAIR -> {
+                unpairRequest(args, callbackContext)
+                return  true
+            }
+            IS_CONNECTED -> {
+                isConnected(callbackContext)
+                return true
+            }
+            else -> {
+                return false
+            }
         }
-
-        var validAction = true
-
-        if (action == PAIR) {
-            pairRequest(args, callbackContext)
-        } else if (action == UNPAIR) {
-            unpairRequest(args, callbackContext)
-        } else if (action == IS_CONNECTED) {
-            isConnected(callbackContext)
-        } else {
-            validAction = false
-
-        }
-
-        return validAction
     }
 
     @Throws(JSONException::class)
     private fun pairRequest(args: CordovaArgs, callbackContext: CallbackContext) {
         val macAddress = args.getString(0)
-        val device = bluetoothAdapter!!.getRemoteDevice(macAddress)
+        val device = bluetoothAdapter.getRemoteDevice(macAddress)
         try {
             PIN = args.getString(1)
         } catch (e: JSONException) {
             PIN = ""
         }
 
-        if (bluetoothAdapter!!.isDiscovering) {
-            bluetoothAdapter!!.cancelDiscovery()
+        if (bluetoothAdapter.isDiscovering) {
+            bluetoothAdapter.cancelDiscovery()
         }
         val pairingReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -93,7 +92,7 @@ class BluetoothPair : CordovaPlugin() {
         activity.registerReceiver(pairingReceiver, IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST))
         activity.registerReceiver(pairingReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
 
-        if (device.createBond() != true) {
+        if (!device.createBond()) {
             Log.d(TAG, "Must already be bonded/paired!")
             callbackContext.success("PAIRED already")
         }
@@ -102,7 +101,7 @@ class BluetoothPair : CordovaPlugin() {
     @Throws(JSONException::class)
     private fun unpairRequest(args: CordovaArgs, callbackContext: CallbackContext) {
         val macAddress = args.getString(0)
-        val device = bluetoothAdapter!!.getRemoteDevice(macAddress)
+        val device = bluetoothAdapter.getRemoteDevice(macAddress)
         try {
             val removeBond = BluetoothDevice::class.java.getMethod("removeBond")
             if (!(removeBond.invoke(device) as Boolean)) {
@@ -125,7 +124,8 @@ class BluetoothPair : CordovaPlugin() {
             val sources = dev.sources
 
             // Verify that the device has gamepad buttons, control sticks, or both.
-            if (sources and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD || sources and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK) {
+            if ((sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+                    (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
                 // This device is a game controller. Store its device ID.
                 if (!gameControllerDeviceIds.contains(deviceId)) {
                     gameControllerDeviceIds.add(deviceId)
