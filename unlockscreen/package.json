@@ -1,6 +1,7 @@
 {
   "name": "unlockscreen",
   "version": "0.0.1",
+  "types": "./types/index.d.ts",
   "description": "set auto unlock screen off or on",
   "cordova": {
     "id": "rinnegan-plugin-unlockscreen",

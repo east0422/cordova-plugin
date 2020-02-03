@@ -1,6 +1,7 @@
 {
   "name": "binoculars",
   "version": "0.0.1",
+  "types": "./types/index.d.ts",
   "description": "",
   "cordova": {
     "id": "rinnegan-plugin-binoculars",
